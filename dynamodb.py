@@ -33,6 +33,30 @@ def main():
 
     headers = get_headers(client_id, client_secret)
 
+    table = dynamodb.Table('top_tracks')
+
+    cursor.execute('SELECT id FROM artists')
+
+    for (artist_id, ) in cursor.fetchall():
+        URL = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
+        params = {
+            'country': 'US'
+        }
+
+        r = requests.get(URL, params=params, headers=headers)
+
+        raw = json.loads(r.text)
+
+        for track in raw['tracks']:
+            data = {
+                'artist_id': artist_id
+            }
+            data.update(track)
+
+            table.put_item(
+                Item=data
+            )
+
 
 def get_headers(client_id, client_secret):
 
