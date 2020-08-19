@@ -9,6 +9,24 @@ client_secret = "59774097106141119b3ba074c69b99c9"
 
 def main():
 
+    headers = get_headers(client_id, client_secret)
+
+    params = {
+        "q": "BTS",
+        "type": "artist",
+        "limit": "5"
+    }
+
+    r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+    print(r.text)
+    print(r.status_code)
+
+    print("Success")
+    sys.exit(0)
+
+
+def get_headers(client_id, client_secret):
+
     endpoint = "https://accounts.spotify.com/api/token"
     encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
 
@@ -28,13 +46,7 @@ def main():
         "Authorization": "Bearer {}".format(access_token)
     }
 
-    print(access_token)
-
-    print(r.status_code)
-    print(r.text)
-
-    print("Success")
-    sys.exit(0)
+    return headers
 
 
 if __name__=='__main__':
