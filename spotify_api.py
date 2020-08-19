@@ -7,26 +7,44 @@ import logging
 client_id = "0e757e773b7a40dfbdf63381d3169ddf"
 client_secret = "59774097106141119b3ba074c69b99c9"
 
-def main():
 
+def main():
     headers = get_headers(client_id, client_secret)
 
     params = {
         "q": "BTS",
         "type": "artist",
-        "limit": "5"
+        "limit": "2"
     }
 
-    r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
-    print(r.text)
-    print(r.status_code)
+    try:
+        r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+    except:
+        logging.error(r.text)
+        sys.exit(1)
 
-    print("Success")
+    if r.status_code != 200:
+        logging.error(r.text)
+
+        if r.status_code == 429:
+            retry_after = json.loads(r.headers)['Retry-After']
+            time.sleep(int(retry_after))
+            r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+
+        elif r.status_code == 401:
+            headers = get_headers(client_id, client_secret)
+            r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+
+        else:
+            sys.exit(1)
+
+    print(r.status_code)
+    print(r.text)
+    print(r.headers)
     sys.exit(0)
 
 
 def get_headers(client_id, client_secret):
-
     endpoint = "https://accounts.spotify.com/api/token"
     encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
 
@@ -49,5 +67,5 @@ def get_headers(client_id, client_secret):
     return headers
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     main()
