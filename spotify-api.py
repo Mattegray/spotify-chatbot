@@ -23,6 +23,7 @@ def main():
         logging.error(r.text)
         sys.exit(1)
 
+    # Error Handling
     if r.status_code != 200:
         logging.error(r.text)
 
@@ -38,10 +39,31 @@ def main():
         else:
             sys.exit(1)
 
-    print(r.status_code)
-    print(r.text)
-    print(r.headers)
-    sys.exit(0)
+    # Get BTS Albums
+    r = requests.get("https://api.spotify.com/v1/artists/3Nrfpe0tUJi4K4DXYWgMUX/albums", headers=headers)
+
+    raw = json.loads(r.text)
+
+    total = raw['total']
+    offset = raw['offset']
+    limit = raw['limit']
+    next = raw['next']
+
+    albums = []
+    albums.extend(raw['items'])
+
+    # Get only 100 albums
+    count = 0
+    while count < 100 and next:
+        r = requests.get(next, headers=headers)
+        raw = json.loads(r.text)
+        next = raw['next']
+        print(next)
+
+        albums.extend(raw['items'])
+        count = len(albums)
+
+    print(len(albums))
 
 
 def get_headers(client_id, client_secret):
