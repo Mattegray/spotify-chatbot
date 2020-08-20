@@ -4,6 +4,8 @@ import base64
 import json
 import logging
 import pymysql
+import csv
+
 
 client_id = "0e757e773b7a40dfbdf63381d3169ddf"
 client_secret = "59774097106141119b3ba074c69b99c9"
@@ -25,35 +27,47 @@ def main():
 
     headers = get_headers(client_id, client_secret)
 
-    params = {
-        "q": "BTS",
-        "type": "artist",
-        "limit": "1"
-    }
+    # Spotify search
+    artists = []
+    with open('artist_list.csv') as f:
+        raw = csv.reader(f)
+        for row in raw:
+            artists.append(row[0])
 
-    r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+    for a in artists:
+        params = {
+            'q': a,
+            'type': 'artist',
+            'limit': '1'
+        }
+        r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+        raw = json.loads(r.text)
 
-    raw = json.loads(r.text)
-    artist_raw = raw['artists']['items'][0]
-    artist = {}
+        artist = {}
 
-    if artist_raw['name'] == params['q']:
-        artist.update(
-            {
-                'id': artist_raw['id'],
-                'name': artist_raw['name'],
-                'followers': artist_raw['followers']['total'],
-                'popularity': artist_raw['popularity'],
-                'url': artist_raw['external_urls']['spotify'],
-                'image_url': artist_raw['images'][0]['url']
-            }
-        )
+        try:
+            artist_raw = raw['artists']['items'][0]
+            if artist_raw['name'] == params['q']:
+                artist.update(
+                    {
+                        'id': artist_raw['id'],
+                        'name': artist_raw['name'],
+                        'followers': artist_raw['followers']['total'],
+                        'popularity': artist_raw['popularity'],
+                        'url': artist_raw['external_urls']['spotify'],
+                        'image_url': artist_raw['images'][0]['url']
+                    }
+                )
+                insert_row(cursor, artist, 'artists')
+        except:
+            logging.error('No items from search api')
+            continue
 
-    insert_row(cursor, artist, 'artists')
     conn.commit()
 
     print("Success")
     sys.exit(0)
+
 
     try:
         r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
