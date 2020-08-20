@@ -28,45 +28,62 @@ def main():
     headers = get_headers(client_id, client_secret)
 
     # Spotify search
+    # artists = []
+    # with open('artist_list.csv') as f:
+    #     raw = csv.reader(f)
+    #     for row in raw:
+    #         artists.append(row[0])
+    #
+    # for a in artists:
+    #     params = {
+    #         'q': a,
+    #         'type': 'artist',
+    #         'limit': '1'
+    #     }
+    #     r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+    #     raw = json.loads(r.text)
+    #
+    #     artist = {}
+    #
+    #     try:
+    #         artist_raw = raw['artists']['items'][0]
+    #         if artist_raw['name'] == params['q']:
+    #             artist.update(
+    #                 {
+    #                     'id': artist_raw['id'],
+    #                     'name': artist_raw['name'],
+    #                     'followers': artist_raw['followers']['total'],
+    #                     'popularity': artist_raw['popularity'],
+    #                     'url': artist_raw['external_urls']['spotify'],
+    #                     'image_url': artist_raw['images'][0]['url']
+    #                 }
+    #             )
+    #             insert_row(cursor, artist, 'artists')
+    #     except:
+    #         logging.error('No items from search api')
+    #         continue
+    #
+    # conn.commit()
+
+    cursor.execute("SELECT id FROM artists")
     artists = []
-    with open('artist_list.csv') as f:
-        raw = csv.reader(f)
-        for row in raw:
-            artists.append(row[0])
+    for (id, ) in cursor.fetchall():
+        artists.append(id)
 
-    for a in artists:
-        params = {
-            'q': a,
-            'type': 'artist',
-            'limit': '1'
-        }
-        r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+    artist_batch = [artists[i: i+50] for i in range(0, len(artists), 50)]
+
+    for i in artist_batch:
+        ids = ','.join(i)
+        URL = "https://api.spotify.com/v1/artists/?ids={}".format(ids)
+
+        r = requests.get(URL, headers=headers)
         raw = json.loads(r.text)
+        print(raw)
+        print(len(raw['artists']))
+        print("Success")
+        sys.exit(0)
 
-        artist = {}
 
-        try:
-            artist_raw = raw['artists']['items'][0]
-            if artist_raw['name'] == params['q']:
-                artist.update(
-                    {
-                        'id': artist_raw['id'],
-                        'name': artist_raw['name'],
-                        'followers': artist_raw['followers']['total'],
-                        'popularity': artist_raw['popularity'],
-                        'url': artist_raw['external_urls']['spotify'],
-                        'image_url': artist_raw['images'][0]['url']
-                    }
-                )
-                insert_row(cursor, artist, 'artists')
-        except:
-            logging.error('No items from search api')
-            continue
-
-    conn.commit()
-
-    print("Success")
-    sys.exit(0)
 
 
     try:
