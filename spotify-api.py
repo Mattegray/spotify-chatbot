@@ -145,7 +145,7 @@ def insert_row(cursor, data, table):
 
 
 def get_artist_id_from_csv():
-    Spotify search
+    # Spotify search
     artists = []
     with open('artist_list.csv') as f:
         raw = csv.reader(f)
