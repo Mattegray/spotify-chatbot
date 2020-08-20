@@ -27,43 +27,7 @@ def main():
 
     headers = get_headers(client_id, client_secret)
 
-    # Spotify search
-    # artists = []
-    # with open('artist_list.csv') as f:
-    #     raw = csv.reader(f)
-    #     for row in raw:
-    #         artists.append(row[0])
-    #
-    # for a in artists:
-    #     params = {
-    #         'q': a,
-    #         'type': 'artist',
-    #         'limit': '1'
-    #     }
-    #     r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
-    #     raw = json.loads(r.text)
-    #
-    #     artist = {}
-    #
-    #     try:
-    #         artist_raw = raw['artists']['items'][0]
-    #         if artist_raw['name'] == params['q']:
-    #             artist.update(
-    #                 {
-    #                     'id': artist_raw['id'],
-    #                     'name': artist_raw['name'],
-    #                     'followers': artist_raw['followers']['total'],
-    #                     'popularity': artist_raw['popularity'],
-    #                     'url': artist_raw['external_urls']['spotify'],
-    #                     'image_url': artist_raw['images'][0]['url']
-    #                 }
-    #             )
-    #             insert_row(cursor, artist, 'artists')
-    #     except:
-    #         logging.error('No items from search api')
-    #         continue
-    #
-    # conn.commit()
+    # get_artist_id_from_csv()
 
     cursor.execute("SELECT id FROM artists")
     artists = []
@@ -72,18 +36,32 @@ def main():
 
     artist_batch = [artists[i: i+50] for i in range(0, len(artists), 50)]
 
+    artist_genres = []
+
     for i in artist_batch:
         ids = ','.join(i)
         URL = "https://api.spotify.com/v1/artists/?ids={}".format(ids)
 
         r = requests.get(URL, headers=headers)
         raw = json.loads(r.text)
-        print(raw)
-        print(len(raw['artists']))
-        print("Success")
-        sys.exit(0)
 
+        for artist in raw['artists']:
+            for genre in artist['genres']:
+                artist_genres.append(
+                    {
+                        'artist_id': artist['id'],
+                        'genre': genre
+                    }
+                )
 
+    for data in artist_genres:
+        insert_row(cursor, data, 'artist_genres')
+
+    conn.commit()
+    cursor.close()
+
+    print("Success")
+    sys.exit(0)
 
 
     try:
@@ -164,6 +142,46 @@ def insert_row(cursor, data, table):
     key_placeholders = ', '.join(['{0}=%s'.format(k) for k in data.keys()])
     sql = "INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
     cursor.execute(sql, list(data.values())*2)
+
+
+def get_artist_id_from_csv():
+    Spotify search
+    artists = []
+    with open('artist_list.csv') as f:
+        raw = csv.reader(f)
+        for row in raw:
+            artists.append(row[0])
+
+    for a in artists:
+        params = {
+            'q': a,
+            'type': 'artist',
+            'limit': '1'
+        }
+        r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+        raw = json.loads(r.text)
+
+        artist = {}
+
+        try:
+            artist_raw = raw['artists']['items'][0]
+            if artist_raw['name'] == params['q']:
+                artist.update(
+                    {
+                        'id': artist_raw['id'],
+                        'name': artist_raw['name'],
+                        'followers': artist_raw['followers']['total'],
+                        'popularity': artist_raw['popularity'],
+                        'url': artist_raw['external_urls']['spotify'],
+                        'image_url': artist_raw['images'][0]['url']
+                    }
+                )
+                insert_row(cursor, artist, 'artists')
+        except:
+            logging.error('No items from search api')
+            continue
+
+    conn.commit()
 
 
 if __name__ == '__main__':
