@@ -6,6 +6,7 @@ import base64
 import json
 import logging
 import pymysql
+from boto3.dynamodb.conditions import Key, Attr
 
 client_id = "0e757e773b7a40dfbdf63381d3169ddf"
 client_secret = "59774097106141119b3ba074c69b99c9"
@@ -24,6 +25,22 @@ def main():
         logging.error('Could not connect to DynamoDB')
         sys.exit(1)
 
+    table = dynamodb.Table('top_tracks')
+
+    query = table.query( # mostly used
+        KeyConditionExpression=Key('artist_id').eq('00FQb4jTyendYWaN8pK0wa'),
+        FilterExpression=Attr('popularity').gt(70)
+    )
+
+    scan = table.scan( # can be expensive
+        FilterExpression=Attr('popularity').gt(70)
+    )
+
+    print(query['Items'])
+    print(scan['Items'])
+    print("Success")
+    sys.exit(0)
+
     try:
         conn = pymysql.connect(host, user=username, passwd=password, db=database, use_unicode=True, charset='utf8')
         cursor = conn.cursor()
@@ -33,8 +50,7 @@ def main():
 
     headers = get_headers(client_id, client_secret)
 
-    table = dynamodb.Table('top_tracks')
-    cursor.execute("SELECT id FROM artists LIMIT 1")
+    cursor.execute("SELECT id FROM artists")
 
     for (artist_id, ) in cursor.fetchall():
         URL = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
