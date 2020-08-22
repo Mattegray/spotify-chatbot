@@ -40,14 +40,14 @@ def main():
     headers = get_headers(client_id, client_secret)
 
     # Get artist_id from AWS RDS
-    cursor.execute("SELECT id from artists LIMIT 10")
+    cursor.execute("SELECT id from artists")
 
     # Get top-tracks from Spotify for each artist
     top_track_keys = {
         'id': 'id',
         'name': 'name',
         'popularity': 'popularity',
-        'external_url': 'external_url.spotify'
+        'external_url': 'external_urls.spotify'
     }
     top_tracks = []
 
