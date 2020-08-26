@@ -31,9 +31,9 @@ def main():
         logging.error("Could not connect to RDS")
         sys.exit(1)
 
-    athena = boto3.client('athena')
+    athena = boto3.client('athena', region_name='ap-northeast-2')
 
-    query = """
+    query = '''
         SELECT
          artist_id,
          AVG(danceability) AS danceability,
@@ -45,16 +45,15 @@ def main():
         FROM
          top_tracks t1
         JOIN
-         audio_features t2 ON t2.id = t1.id AND CAST(t1.dt AS DATE) = DATE('2019-11-18') AND CAST(t2.dt AS DATE) = DATE('2019-11-18')
+         audio_features t2 ON t2.id = t1.id AND CAST(t1.dt AS DATE) = DATE('2020-08-25') AND CAST(t2.dt AS DATE) = DATE('2020-08-25')
         GROUP BY t1.artist_id
-        LIMIT 20
-    """
+    '''
 
     r = query_athena(query, athena)
     results = get_query_result(r['QueryExecutionId'], athena)
     artists = process_data(results)
 
-    query = """
+    query = '''
         SELECT
          MIN(danceability) AS danceability_min,
          MAX(danceability) AS danceability_max,
@@ -70,21 +69,51 @@ def main():
          MAX(instrumentalness) AS instrumentalness_max
         FROM
          audio_features
-    """
+    '''
 
     r = query_athena(query, athena)
     results = get_query_result(r['QueryExecutionId'], athena)
-    artists = process_data(results)[0]
+    avgs = process_data(results)[0]
+
+    metrics = ['danceability', 'energy', 'loudness', 'speechiness', 'acousticness', 'instrumentalness']
+    print('Looping through artists...')
+    for i in artists:
+        for j in artists:
+            dist = 0
+            for k in metrics:
+                x = float(i[k])
+                x_norm = normalize(x, float(avgs[k+'_min']), float(avgs[k+'_max']))
+                y = float(j[k])
+                y_norm = normalize(y, float(avgs[k+'_min']), float(avgs[k+'_max']))
+                dist += (x_norm-y_norm)**2
+            dist = math.sqrt(dist) # euclidean distance
+
+            data = {
+                'artist_id': i['artist_id'],
+                'y_artist': j['artist_id'],
+                'distance': dist
+            }
+            print('Inserting...')
+            insert_row(cursor, data, 'related_artists')
+
+    conn.commit()
+    cursor.close()
+
+
+def normalize(x, x_min, x_max):
+    normalized = (x-x_min) / (x_max-x_min)
+    return normalized
 
 
 def query_athena(query, athena):
+    print('Starting query execution...')
     response = athena.start_query_execution(
         QueryString=query,
         QueryExecutionContext={
-            'Database': 'production'
+            'Database': 'default'
         },
         ResultConfiguration={
-            'OutputLocation': "s3://athena-panomix-tables/repair/",
+            'OutputLocation': "s3://matt-spotify-artists/repair/",
             'EncryptionConfiguration': {
                 'EncryptionOption': 'SSE_S3'
             }
@@ -95,7 +124,7 @@ def query_athena(query, athena):
 
 
 def get_query_result(query_id, athena):
-
+    print('Getting query execution...')
     response = athena.get_query_execution(
         QueryExecutionId=str(query_id)
     )
@@ -108,7 +137,7 @@ def get_query_result(query_id, athena):
         response = athena.get_query_execution(
             QueryExecutionId=str(query_id)
         )
-
+    print('Getting query results...')
     response = athena.get_query_results(
         QueryExecutionId=str(query_id),
         MaxResults=1000
@@ -118,7 +147,7 @@ def get_query_result(query_id, athena):
 
 
 def process_data(results):
-
+    print('Processing data...')
     columns = [col['Label'] for col in results['ResultSet']['ResultSetMetadata']['ColumnInfo']]
 
     listed_results = []
