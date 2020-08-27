@@ -4,9 +4,14 @@ import logging
 import requests
 import pymysql
 import messenger
+import json
+import base64
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+client_id = "0e757e773b7a40dfbdf63381d3169ddf"
+client_secret = "59774097106141119b3ba074c69b99c9"
 
 PAGE_TOKEN = "EAAKf95XftI0BAD1rBPMRIi07ZBbIxJzajhZAcgAKalNYZApYeZBgAdQaUKVl53uMz6z7AUwvOhio7Y1VHC0cIsPZBmPCUuYF4quyycg5gOfpNSHOqZBBWJnBZBmput1F50Vh6RSIStA7loLqNBUseqqmpx6eeGXNyOWZAgQTcWX9uKo3n4OgU6VLNp6IZCdCbT6MZD"
 VERIFY_TOKEN = "verify_123"
@@ -39,12 +44,20 @@ def lambda_handler(event, context):
     else:
         messaging = event['entry'][0]['messaging'][0]
         user_id = messaging['sender']['id']
+
         logger.info(messaging)
         artist_name = messaging['message']['text']
 
         query = "SELECT image_url, url FROM artists WHERE name = '{}'".format(artist_name)
         cursor.execute(query)
-        image_url, url = cursor.fetchall()[0]
+        raw = cursor.fetchall()
+
+        if len(raw) == 0:
+            text = search_artist(cursor, artist_name)
+            bot.send_text(user_id, text)
+            sys.exit(0)
+
+        image_url, url = raw[0]
         payload = {
             'template_type': 'generic',
             'elements': [
@@ -73,6 +86,72 @@ def lambda_handler(event, context):
         bot.send_text(user_id, text)
         bot.send_text(user_id, ', '.join(genres))
 
-        ## if artist not present add artist
 
-        ##
+def get_headers(client_id, client_secret):
+    endpoint = "https://accounts.spotify.com/api/token"
+    encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
+
+    headers = {
+        "Authorization": "Basic {}".format(encoded)
+    }
+
+    payload = {
+        "grant_type": "client_credentials"
+    }
+
+    r = requests.post(endpoint, data=payload, headers=headers)
+
+    access_token = json.loads(r.text)['access_token']
+
+    headers = {
+        "Authorization": "Bearer {}".format(access_token)
+    }
+
+    return headers
+
+
+def insert_row(cursor, data, table):
+    placeholders = ', '.join(['%s'] * len(data))
+    columns = ', '.join(data.keys())
+    key_placeholders = ', '.join(['{0}=%s'.format(k) for k in data.keys()])
+    sql = "INSERT INTO %s (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
+    cursor.execute(sql, list(data.values())*2)
+
+
+def search_artist(cursor, artist_name):
+    headers = get_headers(client_id, client_secret)
+    params = {
+        'q': artist_name,
+        'type': 'artist',
+        'limit': '1'
+    }
+    r = requests.get("https://api.spotify.com/v1/search", params=params, headers=headers)
+    raw = json.loads(r.text)
+
+    if raw['artists']['items'] == []:
+        return "Could not find the artist. Please try again."
+
+    artist = {}
+    artist_raw = raw['artists']['items'][0]
+    if artist_raw['name'] == params['q']:
+        artist.update(
+            {
+                'id': artist_raw['id'],
+                'name': artist_raw['name'],
+                'followers': artist_raw['followers']['total'],
+                'popularity': artist_raw['popularity'],
+                'url': artist_raw['external_urls']['spotify'],
+                'image_url': artist_raw['images'][0]['url']
+            }
+        )
+
+        for i in artist_raw['genres']:
+            if len(artist_raw['genres']) != 0:
+                insert_row(cursor, {'artist_id': artist_raw['id'], 'genre': i}, 'artist_genres')
+
+        insert_row(cursor, artist, 'artists')
+        conn.commit()
+
+        return "We added the artist. Please try again in a second."
+
+    return "Could not find the artist. Please try again."
