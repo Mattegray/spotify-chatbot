@@ -42,6 +42,26 @@ def lambda_handler(event, context):
         logger.info(messaging)
         artist_name = messaging['message']['text']
 
+        query = "SELECT image_url, url FROM artists WHERE name = '{}'".format(artist_name)
+        cursor.execute(query)
+        image_url, url = cursor.fetchall()[0]
+        payload = {
+            'template_type': 'generic',
+            'elements': [
+                {
+                    'title': 'Artist Info: {}'.format(artist_name),
+                    'image_url': image_url,
+                    'subtitle': 'information',
+                    'default_action': {
+                        'type': 'web_url',
+                        'url': url,
+                        'webview_height_ratio': 'full'
+                    }
+                }
+            ]
+        }
+        bot.send_attachment(user_id, 'template', payload)
+
         query = "SELECT t2.genre FROM artists t1 JOIN artist_genres t2 ON t2.artist_id = t1.id WHERE t1.name = '{}'".format(artist_name)
         cursor.execute(query)
 
@@ -52,6 +72,7 @@ def lambda_handler(event, context):
         text = "Here are genres of {}".format(artist_name)
         bot.send_text(user_id, text)
         bot.send_text(user_id, ', '.join(genres))
+
         ## if artist not present add artist
 
         ##
