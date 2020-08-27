@@ -6,6 +6,7 @@ import pymysql
 import messenger
 import json
 import base64
+import boto3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -82,7 +83,7 @@ def lambda_handler(event, context):
         for (genre, ) in cursor.fetchall():
             genres.append(genre)
 
-        text = "Here are genres of {}".format(artist_name)
+        text = "Here are genres of {}:".format(artist_name)
         bot.send_text(user_id, text)
         bot.send_text(user_id, ', '.join(genres))
 
@@ -118,6 +119,20 @@ def insert_row(cursor, data, table):
     cursor.execute(sql, list(data.values())*2)
 
 
+def invoke_lambda(fxn_name, payload, invocation_type='Event'):
+    lambda_client = boto3.client('lambda')
+    invoke_response = lambda_client.invoke(
+        FunctionName = fxn_name,
+        InvocationType = invocation_type,
+        Payload = json.dumps(payload)
+    )
+
+    if invoke_response['StatusCode'] not in [200, 202, 204]:
+        logging.error("ERRORL Invoking lambda function: '{0}' failed".format(fxn_name))
+
+    return invoke_response
+
+
 def search_artist(cursor, artist_name):
     headers = get_headers(client_id, client_secret)
     params = {
@@ -151,6 +166,8 @@ def search_artist(cursor, artist_name):
 
         insert_row(cursor, artist, 'artists')
         conn.commit()
+        r = invoke_lambda('top-tracks', payload={'artist_id': artist_raw['id']})
+        print(r)
 
         return "We added the artist. Please try again in a second."
 
